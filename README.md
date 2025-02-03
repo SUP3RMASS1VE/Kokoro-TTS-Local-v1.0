@@ -1,3 +1,6 @@
+# A Pinokio script for Kokoro-TTS
+----------------------------------
+
 # Kokoro TTS Local
 
 **Kokoro TTS Local** is a cutting-edge text-to-speech (TTS) synthesis program that utilises deep learning to generate high-quality speech from text. This tool provides multiple voice options, speed adjustments, and support for various languages. The best part? It runs locally, ensuring fast, offline speech generation directly from your computer.
