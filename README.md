@@ -1,44 +1,48 @@
 Kokoro TTS Local
-Kokoro is a high-quality text-to-speech (TTS) synthesis program that leverages deep learning techniques. This project allows users to generate high-fidelity speech from text input, with several voice options and speed adjustments. The model supports multiple languages, and the system can run locally, making it fast and easy to generate speech right from your computer.
+Kokoro TTS Local is a cutting-edge text-to-speech (TTS) synthesis program that utilises deep learning to generate high-quality speech from text. This tool provides multiple voice options, speed adjustments, and support for various languages. The best part? It runs locally, ensuring fast, offline speech generation directly from your computer.
 
-Features
-Voice Selection: Choose from a variety of voices, including options from different languages such as English and others.
-Speech Speed Control: Adjust the speed of the generated speech from 0.5x to 4x to match your needs.
-Phoneme Output: Get the phoneme sequence for the generated speech.
-GPU/CPU Support: Automatically falls back to CPU if GPU support is unavailable.
-Local Operation: Runs entirely locally on your machine without requiring an internet connection.
-High-Quality Audio: Produces high-quality speech audio at 24kHz.
+Key Features
+Voice Selection: Choose from a diverse range of voices, including various accents and languages like English and more.
+Speech Speed Control: Adjust the speech speed anywhere from 0.5x to 4x to suit your preference.
+Phoneme Output: View the phoneme sequence for each generated speech.
+GPU/CPU Support: Automatically switches to CPU if GPU support isn’t available, ensuring smooth operation.
+Local Operation: Runs entirely on your local machine without needing an internet connection.
+High-Quality Audio: Generates 24kHz high-quality audio for clear and natural speech.
 Requirements
 Python 3.x
-PyTorch (with CUDA support if available)
+PyTorch (with CUDA support, if available)
 Gradio
-kokoro
+Kokoro
 tqdm
 scipy
-You can install the necessary dependencies via pip:
-Ensure you have the correct CUDA version installed if you want GPU support.
+Installation: You can easily install the required dependencies using pip. If you plan to use GPU support, make sure to install the correct CUDA version.
 
-Usage
-Step 1: Set up the environment
-Install the required dependencies as mentioned above.
-Make sure your machine has access to a GPU for optimal performance. If not, the model will default to using the CPU.
-Ensure that you have the necessary files and configurations for Kokoro’s models and pipelines.
+Usage Guide
+Step 1: Set Up the Environment
+Install all necessary dependencies as listed.
+Ensure your machine has GPU access for optimal performance. If not, the system will default to the CPU.
+Get the necessary files and configurations for the Kokoro models and pipelines.
 Step 2: Running the TTS Application
-Once the environment is set up, you can run the script to launch the application.
+Once everything is set up, run the following command to launch the application:
 
+bash
+Copy
+Edit
 python app.py
-The application will launch a web interface powered by Gradio. You can:
+This will open a web interface powered by Gradio, where you can:
 
-Enter Text: Input the text you want to convert into speech.
-Select Voice: Choose a voice from the dropdown menu. There are several voices available, with different accents and styles.
-Adjust Speed: Use the slider to control the speed of the speech generation.
-Generate Speech: Click the "Generate Speech" button to create the audio output.
-Listen to Audio: The generated speech will play back to you, and the phoneme sequence will be shown below.
+Enter Text: Input the text you’d like to convert to speech.
+Select Voice: Pick from a variety of voices, each with distinct accents and styles.
+Adjust Speed: Use the slider to control the speech speed.
+Generate Speech: Click the “Generate Speech” button to create your audio.
+Listen to Audio: The generated speech will play back, and the phoneme sequence will appear.
 Step 3: Output
-The generated speech will be saved as a .wav file in the outputs/ folder, with a timestamp in the filename. Additionally, the phoneme sequence corresponding to the input text will be displayed.
+The generated speech will be saved as a .wav file in the outputs/ folder with a timestamp. The phoneme sequence for your input text will also be displayed below the audio.
 
 Voice Choices
-The following voices are available for selection:
+Here are the available voices to choose from:
+
+English (US)
 
 🇺🇸 🚺 Heart ❤️
 🇺🇸 🚺 Bella 🔥
@@ -60,6 +64,8 @@ The following voices are available for selection:
 🇺🇸 🚹 Onyx
 🇺🇸 🚹 Santa
 🇺🇸 🚹 Adam
+English (UK)
+
 🇬🇧 🚺 Emma
 🇬🇧 🚺 Isabella
 🇬🇧 🚺 Alice
@@ -68,16 +74,14 @@ The following voices are available for selection:
 🇬🇧 🚹 Fable
 🇬🇧 🚹 Lewis
 🇬🇧 🚹 Daniel
-Each voice has a unique style and accent, providing a wide range of options for your speech generation.
+Each voice offers a distinct style and accent, providing you with plenty of options for your speech generation needs.
 
 Code Explanation
-Model Loading: The model is loaded onto either GPU or CPU depending on your system’s capabilities. It uses the Kokoro TTS system for deep learning-based speech synthesis.
-Pipeline Setup: Different languages and models are handled by separate pipelines, allowing flexibility in voice and language selection.
-Text Preprocessing: The input text is split into manageable chunks to fit the character limit.
-Audio Generation: After processing the text, the TTS system generates speech, which is saved as an audio file.
-Web Interface: Gradio is used to create an interactive UI where users can enter text, select voices, adjust speech speed, and listen to the generated audio.
+Model Loading: The TTS model is loaded onto your system’s GPU or CPU, depending on available resources. It uses the Kokoro TTS system for advanced speech synthesis.
+Pipeline Setup: Separate pipelines handle different languages and models, offering flexibility in voice and language choices.
+Text Preprocessing: Input text is processed in manageable chunks to fit within the character limits of the TTS system.
+Audio Generation: Once the text is processed, speech is generated and saved as an audio file.
+Web Interface: The Gradio interface allows users to interact with the system by entering text, selecting voices, adjusting speed, and hearing the generated speech.
 Troubleshooting
-If you experience any issues with GPU processing, the application will automatically fall back to CPU processing.
-
-GPU not detected: Ensure you have the correct CUDA drivers installed and your GPU is supported by PyTorch.
-Errors during speech generation: This might occur if the text is too long or contains special characters. Try reducing the length or simplifying the text.
+GPU Not Detected: Ensure that the correct CUDA drivers are installed and your GPU is compatible with PyTorch.
+Errors During Speech Generation: If this occurs, it might be due to overly long text or special characters. Try simplifying the input or shortening the text.
