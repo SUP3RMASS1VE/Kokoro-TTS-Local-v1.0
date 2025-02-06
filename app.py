@@ -15,7 +15,7 @@ if CUDA_AVAILABLE:
 else:
     print("Model loaded to CPU.")
 
-pipelines = {lang_code: KPipeline(lang_code=lang_code, model=False) for lang_code in 'ab'}
+pipelines = {lang_code: KPipeline(lang_code=lang_code, model=False) for lang_code in 'abp'}
 pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
 pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 
@@ -55,6 +55,9 @@ CHOICES = {
     '🇬🇧 🚹 Fable': 'bm_fable',
     '🇬🇧 🚹 Lewis': 'bm_lewis',
     '🇬🇧 🚹 Daniel': 'bm_daniel',
+    'PF 🚺 Dora': 'pf_dora',
+    'PM 🚹 Alex': 'pm_alex',
+    'PM 🚹 Santa': 'pm_santa',
 }
 
 def preload_voices():
@@ -133,6 +136,16 @@ with gr.Blocks() as app:
             out_ps = gr.Textbox(interactive=False, show_label=False, info='Phonemes: The phoneme sequence corresponding to the input text.')
 
     generate_btn.click(fn=generate_first, inputs=[text, voice, speed], outputs=[out_audio, out_ps])
+    
+    # Information section at the bottom
+    with gr.Row():
+        gr.Markdown(
+            """
+            ## Voice Information:
+            - **af/am** = (American English) Female/Male
+            - **bf/bm** = (British English) Female/Male
+            - **pf/pm** = (Brazilian Portuguese) Female/Male
+            """
+        )
 
 app.launch()
-
