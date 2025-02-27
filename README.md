@@ -1,123 +1,108 @@
-# A Pinokio script for Kokoro-TTS
-----------------------------------
-
 # Kokoro TTS Local
 
-**Kokoro TTS Local** is a cutting-edge text-to-speech (TTS) synthesis program that utilises deep learning to generate high-quality speech from text. This tool provides multiple voice options, speed adjustments, and support for various languages. The best part? It runs locally, ensuring fast, offline speech generation directly from your computer.
+Welcome to Kokoro, a high-quality text-to-speech synthesis program powered by deep learning. This tool converts any text into high-fidelity speech in just a few seconds. Simply input text, select a voice, adjust the speed, and enjoy the generated audio.
+
+## Features
+
+- **High-Quality TTS**: Uses the Kokoro model to produce realistic and natural-sounding speech.
+- **Multiple Voices**: Choose from a wide range of voices in American, British, and Brazilian Portuguese accents.
+- **Adjustable Speed**: Control the speech speed from 0.5x to 4x for optimal listening experience.
+- **Phoneme Sequence Output**: Get the phoneme sequence corresponding to the generated speech.
+- **Easy-to-Use Interface**: An intuitive interface powered by Gradio.
+
+## Usage
+
+Once the app is running, you can interact with the following features:
+
+1. **Input Text**: Type the text you want to convert to speech.
+2. **Select Voice**: Choose from a variety of voices available in American English, British English, and Brazilian Portuguese.
+3. **Adjust Speed**: Control the speech speed from 0.5x to 4x.
+4. **Generate Speech**: Click the "Generate Speech" button to produce the audio. The generated speech will be available for download.
+5. **Phoneme Sequence**: View the phoneme sequence that corresponds to the generated speech in the advanced details section.
+
+## Voice Guide
+
+The available voices are categorized by language and gender. Below is a list of voices you can choose from:
+
+### 🇺🇸 American English
+#### Female Voices
+- **Heart ❤️**: Warm, friendly, general-purpose
+- **Bella 🔥**: Energetic, enthusiastic
+- **Nicole 🎧**: Clear, professional
+- **Aoede**: Melodic, poetic
+- **Kore**: Calm, relaxation
+- **Sarah**: Conversational, casual
+- **Nova**: Modern, tech
+- **Sky**: Bright, children’s content
+- **Alloy**: Neutral, informational
+- **Jessica**: Warm, friendly
+- **River**: Smooth, audiobooks
+
+#### Male Voices
+- **Michael**: Professional, business
+- **Fenrir**: Deep, resonant
+- **Puck**: Playful, light-hearted
+- **Echo**: Clear, instructional
+- **Eric**: Authoritative, educational
+- **Liam**: Conversational, interviews
+- **Onyx**: Rich, narration
+- **Santa**: Jolly, holiday content
+- **Adam**: Neutral, general-purpose
+
+### 🇬🇧 British English
+#### Female Voices
+- **Emma**: Refined, formal
+- **Isabella**: Elegant, sophisticated
+- **Alice**: Clear, proper
+- **Lily**: Gentle, storytelling
+
+#### Male Voices
+- **George**: Distinguished, formal
+- **Fable**: Storyteller, fiction
+- **Lewis**: Articulate, educational
+- **Daniel**: Conversational, interviews
+
+### 🇧🇷 Brazilian Portuguese
+#### Female Voices
+- **Dora**: Clear, general-purpose
+
+#### Male Voices
+- **Alex**: Professional, business
+- **Santa**: Festive, holiday content
+
+## Tips for Better Results
+
+- **Add punctuation**: It helps the model create natural pauses and intonation.
+- **Use complete sentences**: The model works best with grammatically correct text.
+- **Try different speeds**: Some voices sound better at certain speeds.
+- **Match voice to content**: Choose voices that complement your content’s tone.
+
+## Advanced Settings
+
+### Character Limit
+The maximum number of characters per generation is **5000**. For larger texts, consider breaking them into smaller chunks for better processing.
+
+### Special Content Handling
+- **Numbers**: Spell out numbers as words to ensure correct pronunciation.
+- **Acronyms**: Add periods or write them out fully to improve pronunciation.
+- **Foreign Words**: The model handles common foreign words but may struggle with uncommon ones.
+
+### Performance Optimization
+- **GPU Acceleration**: Using a CUDA-compatible GPU greatly improves performance.
+- **CPU Fallback**: If a GPU is unavailable, the app will automatically switch to CPU.
+
+## License
+
+Kokoro TTS is powered by the Kokoro model and is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+## Contributing
+
+If you’d like to contribute to the project, feel free to submit issues or pull requests. We welcome any improvements to the model, documentation, or user interface.
+
+## Support
+
+For any issues or questions, please open an issue on the GitHub repository or contact support.
 
 ---
 
-## Key Features
-
-- **Voice Selection**: Choose from a diverse range of voices, including various accents and languages like English and more.
-- **Speech Speed Control**: Adjust the speech speed anywhere from **0.5x** to **4x** to suit your preference.
-- **Phoneme Output**: View the phoneme sequence for each generated speech.
-- **GPU/CPU Support**: Automatically switches to CPU if GPU support isn’t available, ensuring smooth operation.
-- **Local Operation**: Runs entirely on your local machine without needing an internet connection.
-- **High-Quality Audio**: Generates **24kHz** high-quality audio for clear and natural speech.
-
----
-
-## Requirements
-
-- Python 3.x
-- PyTorch (with CUDA support, if available)
-- Gradio
-- Kokoro
-- tqdm
-- scipy
-
-### Installation
-
-You can easily install the required dependencies using `pip`. If you plan to use GPU support, make sure to install the correct **CUDA** version.
-
----
-
-## Usage Guide
-
-### Step 1: Set Up the Environment
-
-1. Install all necessary dependencies as listed.
-2. Ensure your machine has GPU access for optimal performance. If not, the system will default to the CPU.
-3. Get the necessary files and configurations for the Kokoro models and pipelines.
-
-### Step 2: Running the TTS Application
-
-Once everything is set up, run the following command to launch the application:
-
-```bash
-python app.py
-```
-
-This will open a web interface powered by **Gradio**, where you can:
-
-- **Enter Text**: Input the text you’d like to convert to speech.
-- **Select Voice**: Pick from a variety of voices, each with distinct accents and styles.
-- **Adjust Speed**: Use the slider to control the speech speed.
-- **Generate Speech**: Click the “Generate Speech” button to create your audio.
-- **Listen to Audio**: The generated speech will play back, and the phoneme sequence will appear.
-
-### Step 3: Output
-
-The generated speech will be saved as a **.wav** file in the `outputs/` folder with a timestamp. The phoneme sequence for your input text will also be displayed below the audio.
-
----
-
-## Voice Choices
-
-Here are the available voices to choose from:
-
-**English (US)**  
-- 🇺🇸 💺 **Heart** ❤️  
-- 🇺🇸 💺 **Bella** 🔥  
-- 🇺🇸 💺 **Nicole** 🎧  
-- 🇺🇸 💺 **Aoede**  
-- 🇺🇸 💺 **Kore**  
-- 🇺🇸 💺 **Sarah**  
-- 🇺🇸 💺 **Nova**  
-- 🇺🇸 💺 **Sky**  
-- 🇺🇸 💺 **Alloy**  
-- 🇺🇸 💺 **Jessica**  
-- 🇺🇸 💺 **River**  
-- 🇺🇸 👨 **Michael**  
-- 🇺🇸 👨 **Fenrir**  
-- 🇺🇸 👨 **Puck**  
-- 🇺🇸 👨 **Echo**  
-- 🇺🇸 👨 **Eric**  
-- 🇺🇸 👨 **Liam**  
-- 🇺🇸 👨 **Onyx**  
-- 🇺🇸 👨 **Santa**  
-- 🇺🇸 👨 **Adam**  
-
-**English (UK)**  
-- 🇬🇧 💺 **Emma**  
-- 🇬🇧 💺 **Isabella**  
-- 🇬🇧 💺 **Alice**  
-- 🇬🇧 💺 **Lily**  
-- 🇬🇧 👨 **George**  
-- 🇬🇧 👨 **Fable**  
-- 🇬🇧 👨 **Lewis**  
-- 🇬🇧 👨 **Daniel**  
-
-Each voice offers a distinct style and accent, providing you with plenty of options for your speech generation needs.
-
----
-
-## Code Explanation
-
-1. **Model Loading**: The TTS model is loaded onto your system’s GPU or CPU, depending on available resources. It uses the Kokoro TTS system for advanced speech synthesis.
-2. **Pipeline Setup**: Separate pipelines handle different languages and models, offering flexibility in voice and language choices.
-3. **Text Preprocessing**: Input text is processed in manageable chunks to fit within the character limits of the TTS system.
-4. **Audio Generation**: Once the text is processed, speech is generated and saved as an audio file.
-5. **Web Interface**: The Gradio interface allows users to interact with the system by entering text, selecting voices, adjusting speed, and hearing the generated speech.
-
----
-
-## Troubleshooting
-
-- **GPU Not Detected**: Ensure that the correct CUDA drivers are installed and your GPU is compatible with PyTorch.
-- **Errors During Speech Generation**: If this occurs, it might be due to overly long text or special characters. Try simplifying the input or shortening the text.
-
----
-
-
+Happy speech synthesis! Enjoy bringing your words to life with Kokoro TTS.
