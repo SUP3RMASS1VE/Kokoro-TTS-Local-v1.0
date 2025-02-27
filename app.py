@@ -6,16 +6,21 @@ from datetime import datetime
 from kokoro import KModel, KPipeline
 from tqdm import tqdm
 from scipy.io.wavfile import write
+import warnings
+
+torch.nn.utils.parametrize = torch.nn.utils.parametrizations.weight_norm
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn.modules.rnn")
+warnings.filterwarnings("ignore", category=FutureWarning, module="torch.nn.utils.weight_norm")
 
 CUDA_AVAILABLE = torch.cuda.is_available()
 
-models = {gpu: KModel().to('cuda' if gpu else 'cpu').eval() for gpu in [True]}
+models = {gpu: KModel(repo_id="hexgrad/Kokoro-82M").to('cuda' if gpu else 'cpu').eval() for gpu in [True]}
 if CUDA_AVAILABLE:
     print("Model loaded to GPU.")
 else:
     print("Model loaded to CPU.")
 
-pipelines = {lang_code: KPipeline(lang_code=lang_code, model=False) for lang_code in 'abp'}
+pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
 pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
 pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 
@@ -115,37 +120,234 @@ def generate_first(text, voice='af_heart', speed=1):
 
     return audio_filepath, phoneme_sequence
 
-with gr.Blocks() as app:
+with gr.Blocks(theme=gr.themes.Soft(primary_hue="indigo", secondary_hue="purple")) as app:
     with gr.Row():
         gr.Markdown(
             """
-            # Kokoro TTS Local
-            Welcome to Kokoro, a high-quality text-to-speech synthesis program powered by deep learning. 
+            # 🎙️ Kokoro TTS Local
+            
+            Welcome to Kokoro, a high-quality text-to-speech synthesis program powered by deep learning.
             Input any text, choose a voice, adjust the speed, and generate high-fidelity speech in just a few seconds!
+            
+            <div style="text-align: center; margin: 10px 0;">
+                <span style="background: linear-gradient(90deg, #6366F1, #A855F7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 1.2em; font-weight: bold;">Bringing your words to life with natural-sounding voices</span>
+            </div>
             """
         )
-    with gr.Row():
-        with gr.Column():
-            text = gr.Textbox(label='Enter Text', placeholder="Type something here...", lines=5)
+    
+    with gr.Tabs():
+        with gr.TabItem("Generate Speech"):
             with gr.Row():
-                voice = gr.Dropdown(list(CHOICES.items()), value='af_heart', label='Select Voice', info='Choose a voice for the output. Quality and availability vary by language.')
-            speed = gr.Slider(minimum=0.5, maximum=4, value=1, step=0.1, label='Speech Speed', info='Adjust the speed of the generated speech (0.5 to 4x).')
-        with gr.Column():
-            generate_btn = gr.Button('Generate Speech', variant='primary', size='lg')
-            out_audio = gr.Audio(label='Generated Speech', interactive=False, streaming=False, autoplay=True)
-            out_ps = gr.Textbox(interactive=False, show_label=False, info='Phonemes: The phoneme sequence corresponding to the input text.')
+                with gr.Column(scale=2):
+                    text = gr.Textbox(
+                        label='Enter Text', 
+                        placeholder="Type something here to convert to speech...", 
+                        lines=8,
+                        elem_id="text-input"
+                    )
+                    
+                    with gr.Row():
+                        with gr.Column(scale=2):
+                            voice = gr.Dropdown(
+                                list(CHOICES.items()), 
+                                value='af_heart', 
+                                label='Select Voice', 
+                                info='Choose a voice for the output',
+                                elem_id="voice-selector"
+                            )
+                        with gr.Column(scale=1):
+                            speed = gr.Slider(
+                                minimum=0.5, 
+                                maximum=4, 
+                                value=1, 
+                                step=0.1, 
+                                label='Speech Speed', 
+                                info='Adjust speed (0.5 to 4x)',
+                                elem_id="speed-control"
+                            )
+                    
+                    generate_btn = gr.Button('🔊 Generate Speech', variant='primary', size='lg')
+                
+                with gr.Column(scale=1):
+                    out_audio = gr.Audio(
+                        label='Generated Speech', 
+                        interactive=False, 
+                        streaming=False, 
+                        autoplay=True,
+                        elem_id="audio-output"
+                    )
+                    
+                    with gr.Accordion("Advanced Details", open=False):
+                        out_ps = gr.Textbox(
+                            interactive=False, 
+                            label="Phoneme Sequence", 
+                            info='The phoneme sequence corresponding to the input text',
+                            elem_id="phoneme-output"
+                        )
+        
+        with gr.TabItem("Voice Guide"):
+            gr.Markdown(
+                """
+                ## 🎭 Voice Selection Guide
+                
+                ### 🇺🇸 American English
+                
+                #### Female Voices
+                | Voice | Style | Best For |
+                |-------|-------|----------|
+                | Heart ❤️ | Warm, friendly | General purpose, narration |
+                | Bella 🔥 | Energetic | Marketing, enthusiastic content |
+                | Nicole 🎧 | Clear, professional | Tutorials, business |
+                | Aoede | Melodic | Storytelling, poetry |
+                | Kore | Calm | Meditation, relaxation content |
+                | Sarah | Conversational | Dialogue, casual content |
+                | Nova | Modern | Tech content, news |
+                | Sky | Bright | Children's content, upbeat messages |
+                | Alloy | Neutral | Documentation, informational |
+                | Jessica | Warm | Friendly conversations |
+                | River | Smooth | Audiobooks, long-form content |
+                
+                #### Male Voices
+                | Voice | Style | Best For |
+                |-------|-------|----------|
+                | Michael | Professional | Business, formal content |
+                | Fenrir | Deep, resonant | Dramatic readings |
+                | Puck | Playful | Light-hearted content |
+                | Echo | Clear | Instructional content |
+                | Eric | Authoritative | Educational material |
+                | Liam | Conversational | Dialogue, interviews |
+                | Onyx | Rich | Narration, documentaries |
+                | Santa | Jolly | Holiday content, children's stories |
+                | Adam | Neutral | General purpose |
+                
+                ### 🇬🇧 British English
+                
+                #### Female Voices
+                | Voice | Style | Best For |
+                |-------|-------|----------|
+                | Emma | Refined | Formal content, literature |
+                | Isabella | Elegant | Sophisticated content |
+                | Alice | Clear, proper | Educational, instructional |
+                | Lily | Gentle | Storytelling, children's content |
+                
+                #### Male Voices
+                | Voice | Style | Best For |
+                |-------|-------|----------|
+                | George | Distinguished | Formal presentations, documentaries |
+                | Fable | Storyteller | Narratives, fiction |
+                | Lewis | Articulate | Educational content |
+                | Daniel | Conversational | Dialogue, interviews |
+                
+                ### 🇧🇷 Brazilian Portuguese
+                
+                | Voice | Style | Best For |
+                |-------|-------|----------|
+                | Dora (F) | Clear | General purpose |
+                | Alex (M) | Professional | Business, formal content |
+                | Santa (M) | Festive | Holiday content |
+                """
+            )
+        
+        with gr.TabItem("Tips & Tricks"):
+            gr.Markdown(
+                """
+                ## 💡 Tips for Better Results
+                
+                ### Improve Speech Quality
+                
+                - **Add punctuation**: Proper punctuation helps create natural pauses and intonation
+                - **Use complete sentences**: The model performs better with grammatically complete phrases
+                - **Try different speeds**: Some voices sound more natural at slightly faster or slower speeds
+                - **Consider voice-content match**: Choose voices that match the tone of your content
+                
+                ### Handling Special Content
+                
+                - **Numbers**: Write out numbers as words for better pronunciation of important figures
+                - **Acronyms**: Add periods between letters (like "U.S.A.") or write them out
+                - **Foreign words**: The model handles common foreign words, but may struggle with uncommon ones
+                - **Technical terms**: For domain-specific terminology, test different voices
+                
+                ### Performance Tips
+                
+                - **Character limit**: Remember there's a ${CHAR_LIMIT} character limit per generation
+                - **For longer texts**: Break into smaller chunks for better processing
+                - **GPU acceleration**: Using a GPU significantly improves generation speed
+                """
+            )
+
+    with gr.Row(variant="panel"):
+        gr.Markdown(
+            """
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3>Voice Code Legend:</h3>
+                    <span class="voice-code">af/am</span> = American English (Female/Male) &nbsp;|&nbsp;
+                    <span class="voice-code">bf/bm</span> = British English (Female/Male) &nbsp;|&nbsp;
+                    <span class="voice-code">pf/pm</span> = Brazilian Portuguese (Female/Male)
+                </div>
+                <div>
+                    <p style="text-align: right; font-style: italic; margin: 0;">Powered by Kokoro TTS</p>
+                </div>
+            </div>
+            
+            <style>
+                .voice-code {
+                    font-family: monospace;
+                    background-color: #6366F1;
+                    color: white;
+                    padding: 3px 6px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                }
+            </style>
+            """
+        )
 
     generate_btn.click(fn=generate_first, inputs=[text, voice, speed], outputs=[out_audio, out_ps])
     
-    # Information section at the bottom
-    with gr.Row():
-        gr.Markdown(
-            """
-            ## Voice Information:
-            - **af/am** = (American English) Female/Male
-            - **bf/bm** = (British English) Female/Male
-            - **pf/pm** = (Brazilian Portuguese) Female/Male
-            """
-        )
+    # Add custom CSS for better styling
+    app.load(js="""
+    function() {
+        // Add custom styling
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Custom button hover effect */
+            button.primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+                transition: all 0.3s ease;
+            }
+            
+            /* Improve dropdown styling */
+            #voice-selector select {
+                border-radius: 8px;
+            }
+            
+            /* Add subtle animation to the generate button */
+            @keyframes pulse {
+                0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+                70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+            }
+            
+            button.primary {
+                animation: pulse 2s infinite;
+            }
+            
+            /* Improve text input area */
+            #text-input textarea {
+                border-radius: 8px;
+                transition: border-color 0.3s ease;
+            }
+            
+            #text-input textarea:focus {
+                border-color: #6366F1;
+                box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    """)
 
 app.launch()
