@@ -8,21 +8,36 @@ from tqdm import tqdm
 from scipy.io.wavfile import write
 import warnings
 
+# Set explicit cache directories to ensure consistent caching
+cache_base = os.path.abspath(os.path.join(os.getcwd(), 'cache'))
+os.environ["HF_HOME"] = os.path.abspath(os.path.join(cache_base, 'HF_HOME'))
+os.environ["TORCH_HOME"] = os.path.abspath(os.path.join(cache_base, 'TORCH_HOME'))
+os.environ["TRANSFORMERS_CACHE"] = os.environ["HF_HOME"]
+os.environ["HF_DATASETS_CACHE"] = os.environ["HF_HOME"]
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+print(f"Using cache directory: {os.environ['HF_HOME']}")
+
 torch.nn.utils.parametrize = torch.nn.utils.parametrizations.weight_norm
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn.modules.rnn")
 warnings.filterwarnings("ignore", category=FutureWarning, module="torch.nn.utils.weight_norm")
 
 CUDA_AVAILABLE = torch.cuda.is_available()
 
+# Load models with environment variables controlling cache location
 models = {gpu: KModel(repo_id="hexgrad/Kokoro-82M").to('cuda' if gpu else 'cpu').eval() for gpu in [True]}
 if CUDA_AVAILABLE:
     print("Model loaded to GPU.")
 else:
     print("Model loaded to CPU.")
 
+# Load pipelines with environment variables controlling cache location
 pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
 pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
 pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
+
+# Store loaded voices to avoid reloading
+loaded_voices = {}
 
 CHAR_LIMIT = 5000
 
@@ -66,9 +81,17 @@ CHOICES = {
 }
 
 def preload_voices():
-    for voice in CHOICES.values():
-        pipeline = pipelines[voice[0]]
-        pipeline.load_voice(voice)
+    print("Preloading voices...")
+    for voice_name, voice_id in CHOICES.items():
+        print(f"Loading voice: {voice_name} ({voice_id})")
+        pipeline = pipelines[voice_id[0]]
+        try:
+            voice_pack = pipeline.load_voice(voice_id)
+            loaded_voices[voice_id] = voice_pack
+            print(f"Successfully loaded voice: {voice_name}")
+        except Exception as e:
+            print(f"Error loading voice {voice_name}: {str(e)}")
+    print(f"All voices preloaded successfully. Total voices in cache: {len(loaded_voices)}")
 
 preload_voices()
 
@@ -90,10 +113,19 @@ def generate_first(text, voice='af_heart', speed=1):
     audio_output = []
     ps_output = []
 
-    for chunk in tqdm(chunks, desc="Processing chunks", ncols=100):
-        pipeline = pipelines[voice[0]]
+    # Use the preloaded voice pack from our cache
+    pipeline = pipelines[voice[0]]
+    
+    # Get voice from in-memory cache
+    if voice in loaded_voices:
+        pack = loaded_voices[voice]
+        print(f"Using cached voice: {voice}")
+    else:
+        print(f"Voice {voice} not found in cache, loading now...")
         pack = pipeline.load_voice(voice)
-        
+        loaded_voices[voice] = pack
+    
+    for chunk in tqdm(chunks, desc="Processing chunks", ncols=100):
         for _, ps, _ in pipeline(chunk, voice, speed):
             ref_s = pack[len(ps)-1]
             try:
