@@ -1,6 +1,7 @@
 # Kokoro TTS Local
 
 Welcome to Kokoro, a high-quality text-to-speech synthesis program powered by deep learning. This tool converts any text into high-fidelity speech in just a few seconds. Simply input text, select a voice, adjust the speed, and enjoy the generated audio.
+![Screenshot 2025-03-10 231509](https://github.com/user-attachments/assets/4d70c6f8-d1d4-4ae9-a6b5-0b633731d6f0)
 
 ## Features
 
