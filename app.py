@@ -387,13 +387,24 @@ def build_formula_from_sliders(*args):
     # The args will contain alternating checkbox and slider values
     formula_parts = []
     
+    # Get the organized list of voices in the same order as they appear in the UI
+    voice_keys = list(CHOICES.keys())
+    voice_keys.sort()
+    us_female_voices = [k for k in voice_keys if k.startswith('🇺🇸 🚺')]
+    us_male_voices = [k for k in voice_keys if k.startswith('🇺🇸 🚹')]
+    gb_female_voices = [k for k in voice_keys if k.startswith('🇬🇧 🚺')]
+    gb_male_voices = [k for k in voice_keys if k.startswith('🇬🇧 🚹')]
+    other_voices = [k for k in voice_keys if not (k.startswith('🇺🇸') or k.startswith('🇬🇧'))]
+    organized_voices = us_female_voices + us_male_voices + gb_female_voices + gb_male_voices + other_voices
+    
     for i in range(0, len(args), 2):
         if i+1 < len(args):  # Make sure we have both checkbox and slider
             checkbox = args[i]
             slider = args[i+1]
             
-            if checkbox:  # If checkbox is checked
-                voice_id = CHOICES[list(CHOICES.keys())[i//2]]
+            if checkbox and i//2 < len(organized_voices):  # If checkbox is checked
+                voice_name = organized_voices[i//2]
+                voice_id = CHOICES[voice_name]
                 formula_parts.append(f"{voice_id} * {slider}")
     
     if not formula_parts:
