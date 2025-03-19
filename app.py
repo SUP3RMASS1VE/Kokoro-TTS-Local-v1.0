@@ -16,6 +16,9 @@ os.environ["TORCH_HOME"] = os.path.abspath(os.path.join(cache_base, 'TORCH_HOME'
 os.environ["TRANSFORMERS_CACHE"] = os.environ["HF_HOME"]
 os.environ["HF_DATASETS_CACHE"] = os.environ["HF_HOME"]
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+# Add these environment variables to prevent redownloading models each time
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
 
 print(f"Using cache directory: {os.environ['HF_HOME']}")
 
@@ -25,17 +28,48 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="torch.nn.utils
 
 CUDA_AVAILABLE = torch.cuda.is_available()
 
-# Load models with environment variables controlling cache location
-models = {gpu: KModel(repo_id="hexgrad/Kokoro-82M").to('cuda' if gpu else 'cpu').eval() for gpu in [True]}
-if CUDA_AVAILABLE:
-    print("Model loaded to GPU.")
-else:
-    print("Model loaded to CPU.")
+try:
+    # First run - download models if they don't exist
+    if not os.path.exists(os.path.join(cache_base, 'HF_HOME/hub/models--hexgrad--Kokoro-82M')):
+        print("First run detected, downloading models...")
+        # Temporarily disable offline mode to allow downloads
+        os.environ.pop("TRANSFORMERS_OFFLINE", None)
+        os.environ.pop("HF_HUB_OFFLINE", None)
+        
+    # Load models with environment variables controlling cache location
+    models = {gpu: KModel(repo_id="hexgrad/Kokoro-82M").to('cuda' if gpu else 'cpu').eval() for gpu in [True]}
+    if CUDA_AVAILABLE:
+        print("Model loaded to GPU.")
+    else:
+        print("Model loaded to CPU.")
 
-# Load pipelines with environment variables controlling cache location
-pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
-pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
-pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
+    # Load pipelines with environment variables controlling cache location
+    pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
+    pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
+    pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
+    
+    # After successful loading, re-enable offline mode to prevent future download attempts
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    
+except Exception as e:
+    print(f"Error during model loading: {str(e)}")
+    print("Attempting to load in online mode...")
+    # If offline loading fails, try online mode
+    os.environ.pop("TRANSFORMERS_OFFLINE", None)
+    os.environ.pop("HF_HUB_OFFLINE", None)
+    
+    # Load models with environment variables controlling cache location
+    models = {gpu: KModel(repo_id="hexgrad/Kokoro-82M").to('cuda' if gpu else 'cpu').eval() for gpu in [True]}
+    if CUDA_AVAILABLE:
+        print("Model loaded to GPU.")
+    else:
+        print("Model loaded to CPU.")
+
+    # Load pipelines with environment variables controlling cache location
+    pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
+    pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
+    pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 
 # Store loaded voices to avoid reloading
 loaded_voices = {}
