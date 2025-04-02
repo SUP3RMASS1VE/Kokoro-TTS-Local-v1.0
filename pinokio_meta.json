@@ -1,0 +1,22 @@
+{
+  "posts": [
+    "https://x.com/SUP3RMASS1VE/status/1907480635695837342",
+    "https://x.com/SUP3RMASS1VE/status/1907481506802491713"
+  ],
+  "links": [{
+    "title": "SUP3RMASS1VE (wrote the app/launcher)",
+    "links": [{
+      "type": "bitcoin",
+      "value": "1N942jHr6vVuR2KAe2JEf3nN59eR21tpKv"
+    }, {
+      "title": "X",
+      "value": "https://x.com/SUP3RMASS1VE"
+    }, {
+      "title": "Github",
+      "value": "https://github.com/SUP3RMASS1VE"
+    }, {
+      "title": "Discord",
+      "value": "https://discord.gg/mvDcrA57AQ"
+    }]
+  }]
+}
