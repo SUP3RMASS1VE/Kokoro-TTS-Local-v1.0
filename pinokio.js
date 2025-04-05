@@ -2,7 +2,7 @@ const path = require('path')
 module.exports = {
   version: "3.2",
   title: "Kokoro-TTS-Local",
-  description: "A Powerful Local Text-to-Speech Engine",
+  description: "(NVIDIA ONLY) A Powerful Local Text-to-Speech Engine",
   icon: "icon.png",
   menu: async (kernel, info) => {
     let installed = info.exists("env")
