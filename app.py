@@ -44,9 +44,10 @@ try:
         print("Model loaded to CPU.")
 
     # Load pipelines with environment variables controlling cache location
-    pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
+    pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abpi'}
     pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
     pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
+    pipelines['i'].g2p.lexicon.golds['kokoro'] = 'koˈkɔro'
     
     # After successful loading, re-enable offline mode to prevent future download attempts
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -67,9 +68,10 @@ except Exception as e:
         print("Model loaded to CPU.")
 
     # Load pipelines with environment variables controlling cache location
-    pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abp'}
+    pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abpi'}
     pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
     pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
+    pipelines['i'].g2p.lexicon.golds['kokoro'] = 'koˈkɔro'
 
 # Store loaded voices to avoid reloading
 loaded_voices = {}
@@ -117,6 +119,8 @@ CHOICES = {
     'PF 🚺 Dora': 'pf_dora',
     'PM 🚹 Alex': 'pm_alex',
     'PM 🚹 Santa': 'pm_santa',
+    '🇮🇹 🚺 Sara':      'if_sara',
+    '🇮🇹 🚹 Nicola':    'im_nicola',
 }
 
 # Function to get custom voices from the custom_voices folder
