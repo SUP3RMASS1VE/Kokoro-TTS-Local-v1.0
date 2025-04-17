@@ -47,7 +47,14 @@ try:
     pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abpi'}
     pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
     pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
-    pipelines['i'].g2p.lexicon.golds['kokoro'] = 'koˈkɔro'
+    # Add try-except for Italian pipeline which might not have lexicon attribute
+    try:
+        if hasattr(pipelines['i'].g2p, 'lexicon'):
+            pipelines['i'].g2p.lexicon.golds['kokoro'] = 'kˈkɔro'
+        else:
+            print("Warning: Italian pipeline g2p doesn't have lexicon attribute, skipping custom pronunciation")
+    except Exception as e:
+        print(f"Warning: Could not set custom pronunciation for Italian: {str(e)}")
     
     # After successful loading, re-enable offline mode to prevent future download attempts
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -71,7 +78,14 @@ except Exception as e:
     pipelines = {lang_code: KPipeline(repo_id="hexgrad/Kokoro-82M", lang_code=lang_code, model=False) for lang_code in 'abpi'}
     pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
     pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
-    pipelines['i'].g2p.lexicon.golds['kokoro'] = 'koˈkɔro'
+    # Add try-except for Italian pipeline which might not have lexicon attribute
+    try:
+        if hasattr(pipelines['i'].g2p, 'lexicon'):
+            pipelines['i'].g2p.lexicon.golds['kokoro'] = 'kˈkɔro'
+        else:
+            print("Warning: Italian pipeline g2p doesn't have lexicon attribute, skipping custom pronunciation")
+    except Exception as e:
+        print(f"Warning: Could not set custom pronunciation for Italian: {str(e)}")
 
 # Store loaded voices to avoid reloading
 loaded_voices = {}
@@ -119,8 +133,8 @@ CHOICES = {
     'PF 🚺 Dora': 'pf_dora',
     'PM 🚹 Alex': 'pm_alex',
     'PM 🚹 Santa': 'pm_santa',
-    '🇮🇹 🚺 Sara':      'if_sara',
-    '🇮🇹 🚹 Nicola':    'im_nicola',
+    '🇮🇹 🚺 Sara': 'if_sara',
+    '🇮🇹 🚹 Nicola': 'im_nicola',
 }
 
 # Function to get custom voices from the custom_voices folder
@@ -2034,6 +2048,7 @@ with gr.Blocks(css="""
                     <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.85rem;">
                         <span class="voice-code">af/am</span> <span>American English (Female/Male)</span>
                         <span class="voice-code">bf/bm</span> <span>British English (Female/Male)</span>
+                        <span class="voice-code">IT</span> <span>Italian</span>
                         <span class="voice-code">pf/pm</span> <span>Brazilian Portuguese (Female/Male)</span>
                     </div>
                 </div>
