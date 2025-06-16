@@ -6,7 +6,8 @@ import shutil
 from datetime import datetime
 from kokoro import KModel, KPipeline
 from tqdm import tqdm
-from scipy.io.wavfile import write
+from scipy.io.wavfile import write, read
+import subprocess
 import warnings
 
 # Set explicit cache directories to ensure consistent caching
@@ -16,6 +17,10 @@ os.environ["TORCH_HOME"] = os.path.abspath(os.path.join(cache_base, 'TORCH_HOME'
 os.environ["TRANSFORMERS_CACHE"] = os.environ["HF_HOME"]
 os.environ["HF_DATASETS_CACHE"] = os.environ["HF_HOME"]
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# Set Gradio temp directory to our outputs folder to avoid duplicate file storage
+output_folder = os.path.join(os.getcwd(), 'outputs')
+os.environ["GRADIO_TEMP_DIR"] = os.path.abspath(output_folder)
 # Add these environment variables to prevent redownloading models each time
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -92,9 +97,9 @@ loaded_voices = {}
 
 CHAR_LIMIT = 5000
 
-output_folder = os.path.join(os.getcwd(), 'outputs')
 custom_voices_folder = os.path.join(os.getcwd(), 'custom_voices')
 
+# Create output folder if it doesn't exist (already defined above for GRADIO_TEMP_DIR)
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
@@ -206,7 +211,49 @@ def forward(ps, ref_s, speed):
         print(f"Error with GPU processing: {e}. Falling back to CPU.")
         return models[False](ps, ref_s, speed)
 
-def generate_first(text, voice='af_heart', speed=1):
+def convert_to_mp3(input_wav_path, output_mp3_path, bitrate="192k"):
+    """Convert WAV file to MP3 using ffmpeg"""
+    try:
+        # Import ffmpeg from imageio
+        import imageio_ffmpeg as ffmpeg
+        
+        # Get ffmpeg executable path
+        ffmpeg_path = ffmpeg.get_ffmpeg_exe()
+        
+        # Get input file size for progress info
+        input_size_mb = os.path.getsize(input_wav_path) / (1024 * 1024)
+        print(f"🔄 Converting {input_size_mb:.1f} MB WAV to MP3 (bitrate: {bitrate})...")
+        
+        # Build ffmpeg command
+        cmd = [
+            ffmpeg_path,
+            '-i', input_wav_path,
+            '-codec:a', 'libmp3lame',
+            '-b:a', bitrate,
+            '-y',  # Overwrite output file if it exists
+            output_mp3_path
+        ]
+        
+        print(f"⚙️  Running FFmpeg conversion...")
+        # Run ffmpeg command
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(f"✅ MP3 conversion completed successfully!")
+            return True
+        else:
+            print(f"❌ FFmpeg conversion failed!")
+            print(f"Error details: {result.stderr}")
+            return False
+            
+    except ImportError:
+        print("❌ imageio-ffmpeg not available. Please install it with: pip install imageio-ffmpeg")
+        return False
+    except Exception as e:
+        print(f"❌ Error during MP3 conversion: {str(e)}")
+        return False
+
+def generate_first(text, voice='af_heart', speed=1, output_format='WAV'):
     text = text.strip()
     
     # Check if the voice is a display name from standard voices
@@ -279,12 +326,79 @@ def generate_first(text, voice='af_heart', speed=1):
     phoneme_sequence = '\n'.join(ps_output)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    audio_filename = f"audio_{timestamp}.wav"
-    audio_filepath = os.path.join(output_folder, audio_filename)
     
-    write(audio_filepath, 24000, audio_combined_numpy)
+    # Calculate file size information
+    audio_length_seconds = len(audio_combined_numpy) / 24000
+    estimated_wav_size_mb = (len(audio_combined_numpy) * 2) / (1024 * 1024)  # 16-bit audio
+    
+    print(f"Audio generation complete!")
+    print(f"Audio length: {audio_length_seconds:.1f} seconds ({audio_length_seconds/60:.1f} minutes)")
+    print(f"Estimated WAV file size: {estimated_wav_size_mb:.1f} MB")
+    
+    # Handle different output formats
+    if output_format.upper() == 'MP3':
+        # Save as WAV first, then convert to MP3
+        wav_filename = f"audio_{timestamp}.wav"
+        wav_filepath = os.path.join(output_folder, wav_filename)
+        
+        print(f"Saving audio as WAV file: {wav_filename}")
+        write(wav_filepath, 24000, audio_combined_numpy)
+        actual_wav_size_mb = os.path.getsize(wav_filepath) / (1024 * 1024)
+        print(f"WAV file saved successfully! Actual size: {actual_wav_size_mb:.1f} MB")
+        
+        # Convert to MP3
+        audio_filename = f"audio_{timestamp}.mp3"
+        audio_filepath = os.path.join(output_folder, audio_filename)
+        
+        print(f"Starting MP3 conversion...")
+        print(f"Converting: {wav_filename} → {audio_filename}")
+        
+        # Use ffmpeg for conversion
+        if convert_to_mp3(wav_filepath, audio_filepath):
+            # Check MP3 file size
+            mp3_size_mb = os.path.getsize(audio_filepath) / (1024 * 1024)
+            compression_ratio = (actual_wav_size_mb / mp3_size_mb) if mp3_size_mb > 0 else 0
+            print(f"MP3 conversion successful!")
+            print(f"MP3 file size: {mp3_size_mb:.1f} MB (compression ratio: {compression_ratio:.1f}x)")
+            
+            # Try to remove the WAV file after successful conversion
+            try:
+                os.remove(wav_filepath)
+                print(f"Temporary WAV file removed: {wav_filename}")
+                print(f"Final output: {audio_filename}")
+            except PermissionError:
+                print(f"Warning: Could not delete WAV file (file in use): {wav_filename}")
+                print("The MP3 conversion was successful. You can manually delete the WAV file later.")
+            except Exception as e:
+                print(f"Warning: Could not delete WAV file: {str(e)}")
+        else:
+            # If MP3 conversion fails, keep the WAV file and return it
+            print("MP3 conversion failed. Keeping WAV format.")
+            audio_filename = wav_filename
+            audio_filepath = wav_filepath
+    else:
+        # Default WAV format
+        audio_filename = f"audio_{timestamp}.wav"
+        audio_filepath = os.path.join(output_folder, audio_filename)
+        
+        print(f"Saving audio as WAV file: {audio_filename}")
+        write(audio_filepath, 24000, audio_combined_numpy)
+        actual_wav_size_mb = os.path.getsize(audio_filepath) / (1024 * 1024)
+        print(f"WAV file saved successfully! Size: {actual_wav_size_mb:.1f} MB")
 
-    return audio_filepath, phoneme_sequence
+    # Check if file is too large for proper waveform display
+    final_file_size_mb = os.path.getsize(audio_filepath) / (1024 * 1024)
+    is_large_file = final_file_size_mb > 50  # Consider files over 50MB as large
+    
+    if is_large_file:
+        print(f"⚠️  Large file generated ({final_file_size_mb:.1f} MB)")
+        print(f"📁 File location: {audio_filepath}")
+        print(f"💡 Note: Large files may not display waveforms properly in the browser.")
+        print(f"   You can access the full file directly from the outputs folder.")
+    
+    print(f"🎵 Generation complete! Total processing time for {len(chunks)} chunks.")
+    
+    return audio_filepath, phoneme_sequence, gr.update(visible=is_large_file)
 
 # Function to handle custom voice upload
 def upload_custom_voice(files, voice_name):
@@ -463,6 +577,468 @@ def build_formula_from_sliders(*args):
         return ""
     
     return " + ".join(formula_parts)
+
+# Helper function to generate audio without saving to disk
+def generate_audio_in_memory(text, voice, speed=1):
+    """Generate audio without saving intermediate files"""
+    text = text.strip()
+    
+    # Check if the voice is a display name from standard voices
+    if voice in CHOICES:
+        voice = CHOICES[voice]
+    # Check if the voice is a custom voice display name
+    elif voice.startswith('👤 Custom:'):
+        custom_voices = get_custom_voices()
+        if voice in custom_voices:
+            voice = custom_voices[voice]
+        else:
+            raise gr.Error(f"Custom voice not found: {voice}")
+    
+    chunks = [text[i:i + CHAR_LIMIT] for i in range(0, len(text), CHAR_LIMIT)]
+    
+    audio_output = []
+
+    # Determine if this is a custom voice
+    is_custom = voice.startswith('custom_')
+    
+    # Use the appropriate pipeline
+    if is_custom:
+        pipeline = pipelines['a']  # Use American English pipeline for custom voices
+    else:
+        pipeline = pipelines[voice[0]]
+    
+    # Get voice from in-memory cache or load it
+    if voice in loaded_voices:
+        pack = loaded_voices[voice]
+    else:
+        if is_custom:
+            # Load custom voice from the custom_voices folder
+            voice_name = voice.split('_')[1]
+            voice_file = f"{voice_name}.pt"
+            voice_path = os.path.join(custom_voices_folder, voice_file)
+            
+            # Check if the file exists
+            if not os.path.exists(voice_path):
+                raise gr.Error(f"Custom voice file not found: {voice_file}")
+            
+            # Load the .pt file directly
+            try:
+                pack = torch.load(voice_path, weights_only=True)
+            except Exception as e:
+                raise gr.Error(f"Error loading custom voice: {str(e)}")
+        else:
+            pack = pipeline.load_voice(voice)
+        loaded_voices[voice] = pack
+    
+    for chunk in chunks:
+        for _, ps, _ in pipeline(chunk, voice if not is_custom else None, speed):
+            ref_s = pack[len(ps)-1]
+            try:
+                audio = forward(ps, ref_s, speed)
+            except gr.exceptions.Error as e:
+                gr.Warning(str(e))
+                gr.Info('Retrying with CPU.')
+                audio = models[False](ps, ref_s, speed)
+            
+            audio_output.append(torch.tensor(audio.numpy()))
+    
+    # Return combined audio as tensor
+    audio_combined = torch.cat(audio_output, dim=-1)
+    return audio_combined
+
+# Function to parse conversation script
+def parse_conversation_script(script_text):
+    """Parse a conversation script and extract speakers and their lines"""
+    if not script_text.strip():
+        return []
+    
+    lines = script_text.strip().split('\n')
+    conversation = []
+    current_speaker = None
+    current_text = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Check if line starts with "Speaker X:" pattern
+        if ':' in line:
+            # Check if it's a speaker line
+            potential_speaker = line.split(':', 1)[0].strip()
+            if potential_speaker.lower().startswith('speaker') or len(potential_speaker.split()) <= 3:
+                # Save previous speaker's text if any
+                if current_speaker and current_text:
+                    conversation.append((current_speaker, ' '.join(current_text)))
+                
+                # Start new speaker
+                current_speaker = potential_speaker
+                current_text = [line.split(':', 1)[1].strip()]
+            else:
+                # Not a speaker line, add to current text
+                if current_speaker:
+                    current_text.append(line)
+        else:
+            # Continuation of current speaker's text
+            if current_speaker:
+                current_text.append(line)
+    
+    # Add the last speaker's text
+    if current_speaker and current_text:
+        conversation.append((current_speaker, ' '.join(current_text)))
+    
+    return conversation
+
+def trim_silence(audio_tensor, threshold=0.01):
+    """Trim silence from the beginning and end of audio"""
+    # Find first and last non-silent samples
+    non_silent = torch.abs(audio_tensor) > threshold
+    if not torch.any(non_silent):
+        return audio_tensor  # Return original if all silent
+    
+    # Find first and last non-silent indices
+    first_sound = torch.where(non_silent)[0][0]
+    last_sound = torch.where(non_silent)[0][-1]
+    
+    # Trim with small padding to avoid cutting off audio
+    padding = int(24000 * 0.05)  # 50ms padding
+    start = max(0, first_sound - padding)
+    end = min(len(audio_tensor), last_sound + padding)
+    
+    return audio_tensor[start:end]
+
+def generate_conversation_from_script(script_text, speaker_voices, pause_duration, default_speed, output_format='WAV'):
+    """Generate conversation audio from a script with assigned voices"""
+    conversation = parse_conversation_script(script_text)
+    
+    if not conversation:
+        raise gr.Error("No conversation found. Please enter a script in the format:\nSpeaker 1: Hello\nSpeaker 2: Hi there")
+    
+    # Get unique speakers
+    speakers = list(set([speaker for speaker, _ in conversation]))
+    
+    # Check if all speakers have assigned voices
+    missing_voices = [speaker for speaker in speakers if speaker not in speaker_voices or not speaker_voices[speaker]]
+    if missing_voices:
+        raise gr.Error(f"Please assign voices for: {', '.join(missing_voices)}")
+    
+    audio_segments = []
+    conversation_script = []
+    
+    for i, (speaker, text) in enumerate(conversation):
+        if not text.strip():
+            continue
+            
+        # Update conversation script
+        conversation_script.append(f"{speaker}: {text}")
+        
+        # Get voice for this speaker
+        voice = speaker_voices.get(speaker)
+        if not voice:
+            continue
+            
+        # Debug: Print voice information
+        print(f"Processing speaker '{speaker}' with voice '{voice}'")
+        if voice.startswith('👤 Custom:'):
+            custom_voice_name = voice.replace('👤 Custom: ', '')
+            custom_voice_file = f"{custom_voice_name}.pt"
+            custom_voice_path = os.path.join(custom_voices_folder, custom_voice_file)
+            print(f"Custom voice file path: {custom_voice_path}")
+            print(f"File exists: {os.path.exists(custom_voice_path)}")
+            if not os.path.exists(custom_voice_path):
+                # List available custom voice files
+                available_files = [f for f in os.listdir(custom_voices_folder) if f.endswith('.pt')] if os.path.exists(custom_voices_folder) else []
+                raise gr.Error(f"Custom voice file '{custom_voice_file}' not found in custom_voices folder.\nAvailable custom voice files: {available_files}")
+            
+        # Generate audio for this speaker in memory (no intermediate files saved)
+        try:
+            audio_tensor = generate_audio_in_memory(text, voice, default_speed)
+            
+            # Normalize audio
+            if audio_tensor.max() > 1.0:
+                audio_tensor = audio_tensor / audio_tensor.max()
+            
+            # Trim silence from individual audio clips
+            audio_tensor = trim_silence(audio_tensor)
+            
+            audio_segments.append(audio_tensor)
+            
+            # Handle pause between speakers (can be negative for overlap)
+            if i < len(conversation) - 1:
+                if pause_duration > 0:
+                    # Add silence
+                    pause_samples = int(24000 * pause_duration)
+                    pause_audio = torch.zeros(pause_samples)
+                    audio_segments.append(pause_audio)
+                elif pause_duration < 0:
+                    # Negative pause means trim from the end of current audio
+                    trim_samples = int(24000 * abs(pause_duration))
+                    if len(audio_segments[-1]) > trim_samples:
+                        audio_segments[-1] = audio_segments[-1][:-trim_samples]
+                # If pause_duration == 0, add no pause (direct concatenation)
+                
+        except Exception as e:
+            raise gr.Error(f"Error generating audio for {speaker}: {str(e)}")
+    
+    # Combine all audio segments
+    if audio_segments:
+        combined_audio = torch.cat(audio_segments, dim=-1)
+        combined_audio_numpy = combined_audio.detach().cpu().numpy()
+        
+        # Save the combined conversation
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Handle different output formats
+        if output_format.upper() == 'MP3':
+            # Save as WAV first, then convert to MP3
+            wav_filename = f"conversation_{timestamp}.wav"
+            wav_filepath = os.path.join(output_folder, wav_filename)
+            write(wav_filepath, 24000, combined_audio_numpy)
+            
+            # Convert to MP3
+            conversation_filename = f"conversation_{timestamp}.mp3"
+            conversation_filepath = os.path.join(output_folder, conversation_filename)
+            
+            # Use ffmpeg for conversion
+            if convert_to_mp3(wav_filepath, conversation_filepath):
+                # Check MP3 file size
+                mp3_size_mb = os.path.getsize(conversation_filepath) / (1024 * 1024)
+                wav_size_mb = os.path.getsize(wav_filepath) / (1024 * 1024)
+                compression_ratio = (wav_size_mb / mp3_size_mb) if mp3_size_mb > 0 else 0
+                print(f"MP3 conversion successful!")
+                print(f"MP3 file size: {mp3_size_mb:.1f} MB (compression ratio: {compression_ratio:.1f}x)")
+                
+                # Try to remove the WAV file after successful conversion
+                try:
+                    os.remove(wav_filepath)
+                    print(f"Temporary WAV file removed: {wav_filename}")
+                    print(f"Final output: {conversation_filename}")
+                except PermissionError:
+                    print(f"Warning: Could not delete WAV file (file in use): {wav_filename}")
+                    print("The MP3 conversion was successful. You can manually delete the WAV file later.")
+                except Exception as e:
+                    print(f"Warning: Could not delete WAV file: {str(e)}")
+            else:
+                # If MP3 conversion fails, keep the WAV file and return it
+                print("MP3 conversion failed. Keeping WAV format.")
+                conversation_filename = wav_filename
+                conversation_filepath = wav_filepath
+        else:
+            # Default WAV format
+            conversation_filename = f"conversation_{timestamp}.wav"
+            conversation_filepath = os.path.join(output_folder, conversation_filename)
+            write(conversation_filepath, 24000, combined_audio_numpy)
+        
+        # Create conversation script text
+        script_text = "\n".join(conversation_script)
+        
+        print(f"🎬 Conversation generation complete!")
+        print(f"Only final conversation file saved: {conversation_filename}")
+        print(f"No intermediate speaker files were saved.")
+        
+        return conversation_filepath, script_text
+    else:
+        raise gr.Error("No audio generated. Please check your inputs.")
+
+def update_speaker_voices(script_text, *voice_assignments):
+    """Update speaker voice assignments and return updated components"""
+    conversation = parse_conversation_script(script_text)
+    if not conversation:
+        return [], {}
+    
+    speakers = list(set([speaker for speaker, _ in conversation]))
+    
+    # Create voice assignment dictionary
+    speaker_voices = {}
+    for i, speaker in enumerate(speakers):
+        if i < len(voice_assignments):
+            speaker_voices[speaker] = voice_assignments[i]
+    
+    return speakers, speaker_voices
+
+# Function to generate conversation audio
+def generate_conversation(speaker1_name, speaker1_voice, speaker1_text, speaker1_speed,
+                         speaker2_name, speaker2_voice, speaker2_text, speaker2_speed,
+                         speaker3_name, speaker3_voice, speaker3_text, speaker3_speed,
+                         speaker4_name, speaker4_voice, speaker4_text, speaker4_speed,
+                         speaker5_name, speaker5_voice, speaker5_text, speaker5_speed,
+                         pause_duration):
+    
+    # Collect all speakers and their data
+    speakers = [
+        (speaker1_name, speaker1_voice, speaker1_text, speaker1_speed),
+        (speaker2_name, speaker2_voice, speaker2_text, speaker2_speed),
+        (speaker3_name, speaker3_voice, speaker3_text, speaker3_speed),
+        (speaker4_name, speaker4_voice, speaker4_text, speaker4_speed),
+        (speaker5_name, speaker5_voice, speaker5_text, speaker5_speed)
+    ]
+    
+    # Filter out speakers with no text
+    active_speakers = [(name, voice, text, speed) for name, voice, text, speed in speakers if text.strip()]
+    
+    if not active_speakers:
+        raise gr.Error("Please add text for at least one speaker.")
+    
+    conversation_script = []
+    audio_segments = []
+    
+    # Generate pause audio (silence)
+    pause_samples = int(24000 * pause_duration)  # 24kHz sample rate
+    pause_audio = torch.zeros(pause_samples)
+    
+    for i, (name, voice, text, speed) in enumerate(active_speakers):
+        # Update conversation script
+        speaker_name = name.strip() if name.strip() else f"Speaker {i+1}"
+        conversation_script.append(f"{speaker_name}: {text}")
+        
+        # Generate audio for this speaker
+        try:
+            audio_path, _, _ = generate_first(text, voice, speed)
+            
+            # Load the generated audio
+            sample_rate, audio_data = read(audio_path)
+            
+            # Convert to tensor
+            audio_tensor = torch.tensor(audio_data, dtype=torch.float32)
+            
+            # Normalize audio
+            if audio_tensor.max() > 1.0:
+                audio_tensor = audio_tensor / audio_tensor.max()
+            
+            audio_segments.append(audio_tensor)
+            
+            # Add pause after each speaker (except the last one)
+            if i < len(active_speakers) - 1:
+                audio_segments.append(pause_audio)
+                
+        except Exception as e:
+            raise gr.Error(f"Error generating audio for {speaker_name}: {str(e)}")
+    
+    # Combine all audio segments
+    if audio_segments:
+        combined_audio = torch.cat(audio_segments, dim=-1)
+        combined_audio_numpy = combined_audio.detach().cpu().numpy()
+        
+        # Save the combined conversation
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        conversation_filename = f"conversation_{timestamp}.wav"
+        conversation_filepath = os.path.join(output_folder, conversation_filename)
+        
+        print(f"Saving conversation as: {conversation_filename}")
+        write(conversation_filepath, 24000, combined_audio_numpy)
+        actual_file_size_mb = os.path.getsize(conversation_filepath) / (1024 * 1024)
+        print(f"Conversation saved successfully! Size: {actual_file_size_mb:.1f} MB")
+        
+        # Create conversation script text
+        script_text = "\n".join(conversation_script)
+        
+        # Check if file is too large and provide information
+        conversation_length_seconds = len(combined_audio_numpy) / 24000
+        
+        print(f"🎬 Conversation generation complete!")
+        print(f"Total audio length: {conversation_length_seconds:.1f} seconds ({conversation_length_seconds/60:.1f} minutes)")
+        print(f"Speakers processed: {len(active_speakers)}")
+        
+        if actual_file_size_mb > 50:
+            print(f"⚠️  Large conversation file generated ({actual_file_size_mb:.1f} MB)")
+            print(f"📁 File location: {conversation_filepath}")
+            print(f"💡 Note: Large files may not display waveforms properly in the browser.")
+        
+        return conversation_filepath, script_text
+    else:
+        raise gr.Error("No audio generated. Please check your inputs.")
+
+def debug_custom_voices():
+    """Debug function to list custom voice files"""
+    print("\n=== CUSTOM VOICES DEBUG ===")
+    print(f"Custom voices folder: {custom_voices_folder}")
+    print(f"Folder exists: {os.path.exists(custom_voices_folder)}")
+    
+    if os.path.exists(custom_voices_folder):
+        all_files = os.listdir(custom_voices_folder)
+        pt_files = [f for f in all_files if f.endswith('.pt')]
+        print(f"All files in folder: {all_files}")
+        print(f"PT files found: {pt_files}")
+        
+        # Check what get_custom_voices() returns
+        custom_voices_dict = get_custom_voices()
+        print(f"get_custom_voices() result: {custom_voices_dict}")
+        
+        # Check loaded voices
+        custom_loaded = {k: v for k, v in loaded_voices.items() if k.startswith('custom_')}
+        print(f"Loaded custom voices: {list(custom_loaded.keys())}")
+    else:
+        print("Custom voices folder does not exist!")
+    print("=== END DEBUG ===\n")
+
+# Function to get voice choices for dropdowns
+def get_voice_choices():
+    updated_choices = update_voice_choices()
+    return list(updated_choices.keys())
+
+# Function to clear conversation inputs
+def clear_conversation():
+    return ("", "", "", 1.0, "", "", "", 1.0, "", "", "", 1.0, "", "", "", 1.0, "", "", "", 1.0, None, "")
+
+def clear_script_conversation():
+    """Clear the script-based conversation inputs"""
+    return "", None, "", []
+
+def create_voice_assignment_interface(script_text):
+    """Create dynamic voice assignment interface based on detected speakers"""
+    conversation = parse_conversation_script(script_text)
+    if not conversation:
+        # Return updates for: voice_assignment_interface + 10 radio buttons + detected_speakers
+        empty_updates = [gr.update(visible=False) for _ in range(10)]
+        return [gr.update(visible=False)] + empty_updates + [[]]
+    
+    speakers = list(set([speaker for speaker, _ in conversation]))
+    speakers.sort()  # Sort for consistent ordering
+    
+    # Create individual updates for each radio button
+    radio_updates = []
+    voice_choices = get_voice_choices()  # This includes both standard and custom voices
+    
+    # Debug: Print available voices
+    print(f"Available voice choices: {len(voice_choices)} voices")
+    custom_count = len([v for v in voice_choices if v.startswith('👤 Custom:')])
+    print(f"Custom voices found: {custom_count}")
+    
+    for i in range(10):  # Max 10 speakers supported
+        if i < len(speakers):
+            radio_updates.append(gr.update(
+                visible=True, 
+                label=f"🎤 {speakers[i]}", 
+                value=voice_choices[i % len(voice_choices)],
+                choices=voice_choices
+            ))
+        else:
+            radio_updates.append(gr.update(visible=False))
+    
+    # Return: voice_assignment_interface update + 10 individual radio updates + detected_speakers
+    return [gr.update(visible=True)] + radio_updates + [speakers]
+
+def generate_from_script_with_voices(script_text, pause_duration, default_speed, output_format, *voice_assignments):
+    """Generate conversation from script with voice assignments"""
+    conversation = parse_conversation_script(script_text)
+    if not conversation:
+        raise gr.Error("No conversation found in the script.")
+    
+    speakers = list(set([speaker for speaker, _ in conversation]))
+    speakers.sort()
+    
+    # Create speaker-to-voice mapping
+    speaker_voices = {}
+    for i, speaker in enumerate(speakers):
+        if i < len(voice_assignments) and voice_assignments[i]:
+            speaker_voices[speaker] = voice_assignments[i]
+    
+    # Check if all speakers have voices assigned
+    missing_voices = [speaker for speaker in speakers if speaker not in speaker_voices]
+    if missing_voices:
+        raise gr.Error(f"Please assign voices for: {', '.join(missing_voices)}")
+    
+    return generate_conversation_from_script(script_text, speaker_voices, pause_duration, default_speed, output_format)
 
 with gr.Blocks(css="""
             /* Background animation */
@@ -1764,15 +2340,23 @@ with gr.Blocks(css="""
                                     interactive=True
                                 )
                             with gr.Column(scale=2):
-                                speed = gr.Slider(
-                                    minimum=0.5, 
-                                    maximum=4, 
-                                    value=1, 
-                                    step=0.1, 
-                                    label='⚡ Speech Speed', 
-                                    info='Adjust speed (0.5 to 4x)',
-                                    elem_id="speed-control"
-                                )
+                                with gr.Row():
+                                    speed = gr.Slider(
+                                        minimum=0.5, 
+                                        maximum=4, 
+                                        value=1, 
+                                        step=0.1, 
+                                        label='⚡ Speech Speed', 
+                                        info='Adjust speed (0.5 to 4x)',
+                                        elem_id="speed-control"
+                                    )
+                                with gr.Row():
+                                    output_format = gr.Radio(
+                                        choices=['WAV', 'MP3'],
+                                        value='WAV',
+                                        label='🎵 Output Format',
+                                        info='Choose audio file format'
+                                    )
                         
                         with gr.Row():
                             refresh_btn = gr.Button('🔄 Refresh Voices To Show Custom Voices', size='sm')
@@ -1787,8 +2371,20 @@ with gr.Blocks(css="""
                             label=None, 
                             interactive=False, 
                             streaming=False, 
-                            autoplay=True,
+                            autoplay=False,
                             elem_id="audio-output"
+                        )
+                        
+                        large_file_info = gr.Markdown(
+                            visible=False,
+                            value="""
+                            <div style="background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; padding: 12px; margin: 10px 0;">
+                                <h4 style="margin-top: 0; color: #ffc107;">📁 Large File Generated</h4>
+                                <p style="margin-bottom: 0;">This file is quite large and may not display properly in the browser waveform. 
+                                You can find the complete audio file in the <strong>outputs</strong> folder for the best playback experience.</p>
+                            </div>
+                            """,
+                            elem_id="large-file-warning"
                         )
                         
                         with gr.Accordion("Advanced Details", open=False):
@@ -2039,6 +2635,141 @@ with gr.Blocks(css="""
                     """
                 )
 
+        with gr.TabItem("💬 Conversation Mode", elem_id="conversation-tab"):
+            with gr.Column(elem_classes=["card"]):
+                gr.Markdown(
+                    """
+                    <h2 style="text-align: center; margin-top: 0; font-size: 1.5rem;">💬 Script-Based Conversation</h2>
+                    
+                    <p style="text-align: center;">
+                        Simply paste your conversation script and assign voices to each speaker. The system will automatically 
+                        detect speakers and generate the conversation with natural pauses between speakers.
+                    </p>
+                    """
+                )
+                
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        # Script input
+                        with gr.Column(elem_classes=["card"]):
+                            gr.Markdown("<h3 style='margin-top: 0;'>📝 Conversation Script</h3>")
+                            conversation_script_input = gr.Textbox(
+                                label=None,
+                                placeholder="""Speaker 1: Hello, how are you today?
+Speaker 2: I'm doing great! How about you?
+Speaker 1: Pretty good, thanks for asking.
+Speaker 2: That's wonderful to hear!""",
+                                lines=12,
+                                info="Paste your conversation script here. Use format: 'Speaker Name: dialogue'"
+                            )
+                            
+                            # Settings
+                            with gr.Row():
+                                with gr.Column(scale=1):
+                                    script_pause_duration = gr.Slider(
+                                        minimum=-0.5, 
+                                        maximum=3, 
+                                        value=0.3, 
+                                        step=0.1, 
+                                        label='⏸️ Pause Between Speakers (seconds)',
+                                        info='Use negative values to reduce gaps/overlap audio'
+                                    )
+                                with gr.Column(scale=1):
+                                    script_speed = gr.Slider(
+                                        minimum=0.5, 
+                                        maximum=4, 
+                                        value=1, 
+                                        step=0.1, 
+                                        label='⚡ Default Speech Speed'
+                                    )
+                                with gr.Column(scale=1):
+                                    script_output_format = gr.Radio(
+                                        choices=['WAV', 'MP3'],
+                                        value='WAV',
+                                        label='🎵 Output Format',
+                                        info='Choose audio file format'
+                                    )
+                            
+                            parse_btn = gr.Button('🔍 Parse Script & Detect Speakers', variant='secondary', size="lg")
+                    
+                    with gr.Column(scale=2):
+                        # Voice assignment
+                        with gr.Column(elem_classes=["card"]):
+                            gr.Markdown("<h3 style='margin-top: 0;'>🎤 Voice Assignment</h3>")
+                            
+                            # Dynamic speaker voice assignments (will be created after parsing)
+                            speaker_voice_assignments = gr.State({})
+                            detected_speakers = gr.State([])
+                            
+                            # Voice assignment interface (will be populated dynamically)
+                            voice_assignment_interface = gr.Column(visible=False)
+                            
+                            with voice_assignment_interface:
+                                speaker_voice_radios = []
+                                for i in range(10):  # Support up to 10 speakers
+                                    radio = gr.Radio(
+                                        choices=get_voice_choices(),
+                                        label=f"Speaker {i+1}",
+                                        visible=False,
+                                        interactive=True,
+                                        value=None
+                                    )
+                                    speaker_voice_radios.append(radio)
+                
+                # Control buttons
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        generate_script_conversation_btn = gr.Button('🎬 Generate Conversation', variant='primary', size="lg")
+                    with gr.Column(scale=1):
+                        clear_script_btn = gr.Button('🗑️ Clear Script', variant='secondary', size="lg")
+                
+                # Output section
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        with gr.Column(elem_classes=["card"]):
+                            gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>🎧 Generated Conversation</h3>")
+                            conversation_audio = gr.Audio(
+                                label=None, 
+                                interactive=False, 
+                                streaming=False, 
+                                autoplay=False
+                            )
+                    
+                    with gr.Column(scale=1):
+                        with gr.Column(elem_classes=["card"]):
+                            gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>📋 Detected Script</h3>")
+                            conversation_script = gr.Textbox(
+                                label=None,
+                                interactive=False,
+                                lines=10,
+                                placeholder="Parsed conversation will appear here..."
+                            )
+                
+                # Tips section
+                with gr.Row():
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("### ✅ Correct Format:")
+                        gr.Textbox(
+                            value="""Speaker 1: Hello there!
+Speaker 2: Hi, how are you?
+Alice: I'm doing great!
+Bob: That's wonderful to hear.""",
+                            label=None,
+                            interactive=False,
+                            lines=4,
+                            max_lines=4
+                        )
+                    
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("### 🎯 Pro Tips:")
+                        gr.Markdown("""
+• Use "Speaker 1", "Speaker 2" or any names  
+• Each line should start with "Name:"  
+• Multi-line dialogue is supported  
+• System auto-detects unique speakers  
+• Perfect for scripts, dialogues, interviews  
+                        """)
+
     with gr.Row(variant="panel", elem_id="footer-section"):
         gr.Markdown(
             """
@@ -2065,7 +2796,7 @@ with gr.Blocks(css="""
         )
 
     # Connect buttons to functions
-    generate_btn.click(fn=generate_first, inputs=[text, voice, speed], outputs=[out_audio, out_ps])
+    generate_btn.click(fn=generate_first, inputs=[text, voice, speed, output_format], outputs=[out_audio, out_ps, large_file_info])
     
     # Update the voice list when refreshing
     def update_voice_list():
@@ -2103,5 +2834,30 @@ with gr.Blocks(css="""
         inputs=[voice_formula, mixed_voice_name, voice_text],
         outputs=[mix_status, mix_audio]
     )
+
+    # Connect script-based conversation mode functionality
+    # Parse script and show voice assignment interface
+    parse_btn.click(
+        fn=create_voice_assignment_interface,
+        inputs=[conversation_script_input],
+        outputs=[voice_assignment_interface] + speaker_voice_radios + [detected_speakers]
+    )
+
+    # Generate conversation from script with voice assignments
+    generate_script_conversation_btn.click(
+        fn=generate_from_script_with_voices,
+        inputs=[conversation_script_input, script_pause_duration, script_speed, script_output_format] + speaker_voice_radios,
+        outputs=[conversation_audio, conversation_script]
+    )
+    
+    # Clear script conversation
+    clear_script_btn.click(
+        fn=clear_script_conversation,
+        inputs=[],
+        outputs=[conversation_script_input, conversation_audio, conversation_script, detected_speakers]
+    )
+
+    # Debug custom voices
+    debug_custom_voices()
 
 app.launch()
