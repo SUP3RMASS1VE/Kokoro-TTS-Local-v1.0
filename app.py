@@ -541,7 +541,7 @@ def generate_mixed_voice(formula_text, voice_name="", text_input=""):
         
         # If text input is provided, generate audio with the mixed voice
         if text_input.strip():
-            audio_path, _ = generate_first(text_input, voice_id)
+            audio_path, _, _ = generate_first(text_input, voice_id)
             return f"Mixed voice '{voice_name}' created successfully! You can now select it from the voice dropdown as '👤 Custom: {voice_name}'", audio_path
         else:
             return f"Mixed voice '{voice_name}' created successfully! You can now select it from the voice dropdown as '👤 Custom: {voice_name}'", None
