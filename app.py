@@ -36,7 +36,7 @@ CUDA_AVAILABLE = torch.cuda.is_available()
 try:
     # First run - download models if they don't exist
     if not os.path.exists(os.path.join(cache_base, 'HF_HOME/hub/models--hexgrad--Kokoro-82M')):
-        print("First run detected, downloading models...")
+        print("Downloading/Loading models...")
         # Temporarily disable offline mode to allow downloads
         os.environ.pop("TRANSFORMERS_OFFLINE", None)
         os.environ.pop("HF_HUB_OFFLINE", None)
