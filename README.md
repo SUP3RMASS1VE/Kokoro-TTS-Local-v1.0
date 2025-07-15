@@ -6,7 +6,9 @@ Welcome to Kokoro, a high-quality text-to-speech synthesis program powered by de
 ![Screenshot 2025-03-16 190747](https://github.com/user-attachments/assets/2afc92f4-55a2-4916-861a-bdfb23237416)
 
 ## Installation  
-Install via [Pinokio](https://pinokio.computer).
+### Option 1: Install via [Pinokio](https://pinokio.co).
+
+### Option 1a: Install via [Dione](https://getdione.app)
 
 ## Features
 
