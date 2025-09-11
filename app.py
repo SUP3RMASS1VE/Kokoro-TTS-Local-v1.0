@@ -36,7 +36,7 @@ CUDA_AVAILABLE = torch.cuda.is_available()
 try:
     # First run - download models if they don't exist
     if not os.path.exists(os.path.join(cache_base, 'HF_HOME/hub/models--hexgrad--Kokoro-82M')):
-        print("Downloading/Loading models...")
+        print("First run detected, downloading models...")
         # Temporarily disable offline mode to allow downloads
         os.environ.pop("TRANSFORMERS_OFFLINE", None)
         os.environ.pop("HF_HUB_OFFLINE", None)
@@ -706,6 +706,139 @@ def trim_silence(audio_tensor, threshold=0.01):
     end = min(len(audio_tensor), last_sound + padding)
     
     return audio_tensor[start:end]
+
+def batch_convert_text_files_with_voices(files, speed, output_format, *voice_assignments):
+    """Convert multiple text files to audio using individual voice settings for each file"""
+    if not files:
+        raise gr.Error("Please upload at least one text file.")
+    
+    results = []
+    audio_files = []  # Store paths to generated audio files
+    total_files = len(files)
+    
+    print(f"Starting batch conversion of {total_files} files...")
+    
+    for i, file_path in enumerate(files):
+        try:
+            print(f"Processing file {i+1}/{total_files}: {os.path.basename(file_path)}")
+            
+            # Read the text file
+            with open(file_path, 'r', encoding='utf-8') as f:
+                text_content = f.read().strip()
+            
+            if not text_content:
+                print(f"Skipping empty file: {os.path.basename(file_path)}")
+                results.append(f"❌ {os.path.basename(file_path)}: Empty file")
+                audio_files.append(None)
+                continue
+            
+            # Get the voice for this specific file
+            voice = voice_assignments[i] if i < len(voice_assignments) and voice_assignments[i] else list(update_voice_choices().keys())[0]
+            
+            # Generate audio for this text with the assigned voice
+            audio_path, _, _ = generate_first(text_content, voice, speed, output_format)
+            
+            # Rename the output file to match the input filename
+            input_filename = os.path.splitext(os.path.basename(file_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            if output_format.upper() == 'MP3':
+                new_filename = f"{input_filename}_{timestamp}.mp3"
+            else:
+                new_filename = f"{input_filename}_{timestamp}.wav"
+            
+            new_audio_path = os.path.join(output_folder, new_filename)
+            
+            # Rename the generated file
+            if os.path.exists(audio_path):
+                os.rename(audio_path, new_audio_path)
+                file_size_mb = os.path.getsize(new_audio_path) / (1024 * 1024)
+                
+                # Get voice display name for results
+                voice_display = voice if voice in update_voice_choices() else voice
+                results.append(f"✅ {os.path.basename(file_path)} → {new_filename} ({file_size_mb:.1f} MB) [Voice: {voice_display}]")
+                audio_files.append(new_audio_path)
+                print(f"✅ Completed: {new_filename} with voice: {voice}")
+            else:
+                results.append(f"❌ {os.path.basename(file_path)}: Audio generation failed")
+                audio_files.append(None)
+                
+        except Exception as e:
+            error_msg = f"❌ {os.path.basename(file_path)}: {str(e)}"
+            results.append(error_msg)
+            audio_files.append(None)
+            print(f"Error processing {os.path.basename(file_path)}: {str(e)}")
+    
+    # Create summary
+    successful = len([r for r in results if r.startswith("✅")])
+    failed = len([r for r in results if r.startswith("❌")])
+    
+    summary = f"Batch conversion completed!\n"
+    summary += f"✅ Successful: {successful}/{total_files}\n"
+    summary += f"❌ Failed: {failed}/{total_files}\n\n"
+    summary += "Results:\n" + "\n".join(results)
+    
+    print(f"Batch conversion completed: {successful} successful, {failed} failed")
+    
+    return summary, audio_files
+
+def update_file_voice_assignments(files):
+    """Update the voice assignment interface when files are uploaded"""
+    if not files:
+        # Hide all voice assignments if no files
+        updates = [gr.update(visible=False)]  # Hide the container
+        for i in range(20):
+            updates.append(gr.update(visible=False))
+        return updates
+    
+    # Show the container and update voice assignments for each file
+    updates = [gr.update(visible=True)]  # Show the container
+    
+    for i in range(20):
+        if i < len(files):
+            filename = os.path.basename(files[i])
+            updates.append(gr.update(
+                visible=True,
+                label=f"🎵 Voice for: {filename}",
+                value=list(update_voice_choices().keys())[0]  # Default to first voice
+            ))
+        else:
+            updates.append(gr.update(visible=False))
+    
+    return updates
+
+def assign_same_voice_to_all(voice_choice, files):
+    """Assign the same voice to all uploaded files"""
+    if not files:
+        return [gr.update() for _ in range(20)]
+    
+    updates = []
+    for i in range(20):
+        if i < len(files):
+            updates.append(gr.update(value=voice_choice))
+        else:
+            updates.append(gr.update())
+    
+    return updates
+
+def update_batch_audio_players(audio_files):
+    """Update the batch audio players with generated files"""
+    updates = []
+    
+    for i in range(20):  # Match the number of audio players created
+        if i < len(audio_files) and audio_files[i] is not None:
+            # Show this audio player with the generated file
+            filename = os.path.basename(audio_files[i])
+            updates.append(gr.update(value=audio_files[i], visible=True, label=f"🎵 {filename}"))
+        else:
+            # Hide this audio player
+            updates.append(gr.update(visible=False))
+    
+    # Show the audio files column if we have any files
+    has_files = any(f is not None for f in audio_files) if audio_files else False
+    audio_column_update = gr.update(visible=has_files)
+    
+    return [audio_column_update] + updates
 
 def generate_conversation_from_script(script_text, speaker_voices, pause_duration, default_speed, output_format='WAV'):
     """Generate conversation audio from a script with assigned voices"""
@@ -2635,6 +2768,157 @@ with gr.Blocks(css="""
                     """
                 )
 
+        with gr.TabItem("📁 Batch Convert", elem_id="batch-convert-tab"):
+            with gr.Column(elem_classes=["card"]):
+                gr.Markdown(
+                    """
+                    <h2 style='text-align: center; margin-bottom: 1rem; background: linear-gradient(90deg, #4776E6, #8E54E9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;'>
+                        📁 Batch Text-to-Speech Conversion
+                    </h2>
+                    <p style='text-align: center; margin-bottom: 1.5rem; color: #666; font-size: 1.1rem;'>
+                        Convert multiple text files to audio at once with the same voice settings
+                    </p>
+                    """
+                )
+                
+                with gr.Row():
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>📂 Upload Text Files</h3>")
+                        
+                        batch_files = gr.File(
+                            label="Select Text Files (.txt)",
+                            file_count="multiple",
+                            file_types=[".txt"],
+                            height=200
+                        )
+                        
+                        gr.Markdown(
+                            """
+                            **Supported formats:** .txt files with UTF-8 encoding  
+                            **Tip:** You can select multiple files at once using
+                            """
+                        )
+                
+                with gr.Row():
+                    with gr.Column(scale=2, elem_classes=["card"]):
+                        gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>🎤 Voice Assignment for Each File</h3>")
+                        
+                        # Dynamic file-voice assignment interface
+                        file_voice_assignments = gr.Column(visible=False)
+                        
+                        # Create voice assignment radios for each file (up to 20 files)
+                        file_voice_radios = []
+                        for i in range(20):
+                            voice_radio = gr.Radio(
+                                choices=list(update_voice_choices().keys()),
+                                value=list(update_voice_choices().keys())[0],
+                                label=f"File {i+1}",
+                                visible=False,
+                                interactive=True
+                            )
+                            file_voice_radios.append(voice_radio)
+                    
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>⚙️ Global Settings</h3>")
+                        
+                        batch_speed = gr.Slider(
+                            minimum=0.5,
+                            maximum=2.0,
+                            value=1.0,
+                            step=0.1,
+                            label="Speed (applies to all files)",
+                            interactive=True
+                        )
+                        
+                        batch_output_format = gr.Radio(
+                            choices=['WAV', 'MP3'],
+                            value='WAV',
+                            label="Output Format (applies to all files)",
+                            interactive=True
+                        )
+                        
+                        gr.Markdown("---")
+                        
+                        # Quick voice assignment buttons
+                        gr.Markdown("**Quick Assign:**")
+                        
+                        with gr.Row():
+                            assign_same_voice_btn = gr.Button(
+                                "🔄 Use Same Voice for All",
+                                size="sm",
+                                variant="secondary"
+                            )
+                        
+                        quick_voice_select = gr.Radio(
+                            choices=list(update_voice_choices().keys())[:10],  # Show top 5 voices for quick selection
+                            value=list(update_voice_choices().keys())[0],
+                            label="Quick Voice Selection",
+                            interactive=True
+                        )
+                        
+                        batch_convert_btn = gr.Button(
+                            "🚀 Start Batch Conversion",
+                            variant="primary",
+                            size="lg"
+                        )
+                
+                with gr.Row():
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>📊 Conversion Results</h3>")
+                        batch_results = gr.Textbox(
+                            label=None,
+                            placeholder="Conversion results will appear here...",
+                            lines=10,
+                            interactive=False
+                        )
+                    
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("<h3 style='text-align: center; margin-top: 0;'>🎧 Generated Audio Files</h3>")
+                        batch_audio_files = gr.Column(visible=False)
+                        
+                        # Create multiple audio players for batch results
+                        batch_audio_players = []
+                        for i in range(20):  # Support up to 20 files in batch
+                            audio_player = gr.Audio(
+                                label=f"File {i+1}",
+                                interactive=False,
+                                visible=False,
+                                elem_id=f"batch-audio-{i}"
+                            )
+                            batch_audio_players.append(audio_player)
+                
+                # Tips section for batch conversion
+                with gr.Row():
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("### 💡 Batch Tips:")
+                        gr.Markdown("""
+• **Individual Voices:** Each file can have its own voice  
+• **Quick Assignment:** Use "Same Voice for All" for consistency  
+• **Output Naming:** Files are named `[original_name]_[timestamp].[format]`  
+• **Auto-Skip:** Empty files are automatically skipped  
+• **Processing:** Large files may take longer to process  
+                        """)
+                    
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("### 📋 How to Use:")
+                        gr.Markdown("""
+• **Step 1:** Upload your .txt files  
+• **Step 2:** Assign voices to each file individually  
+• **Step 3:** Set global speed and output format  
+• **Step 4:** Click "Start Batch Conversion"  
+• **Step 5:** Play generated files directly in the interface  
+                        """)
+                    
+                    with gr.Column(scale=1, elem_classes=["card"]):
+                        gr.Markdown("### 📋 File Requirements:")
+                        gr.Markdown("""
+• **Format:** Plain text files (.txt)  
+• **Encoding:** UTF-8 recommended  
+• **Size:** Up to 5000 characters per file  
+• **Content:** Any text content  
+• **Names:** Avoid special characters in filenames  
+                        """)
+
         with gr.TabItem("💬 Conversation Mode", elem_id="conversation-tab"):
             with gr.Column(elem_classes=["card"]):
                 gr.Markdown(
@@ -2798,12 +3082,58 @@ Bob: That's wonderful to hear.""",
     # Connect buttons to functions
     generate_btn.click(fn=generate_first, inputs=[text, voice, speed, output_format], outputs=[out_audio, out_ps, large_file_info])
     
+    # Connect file upload to voice assignment interface
+    batch_files.change(
+        fn=update_file_voice_assignments,
+        inputs=[batch_files],
+        outputs=[file_voice_assignments] + file_voice_radios
+    )
+    
+    # Connect quick voice assignment button
+    assign_same_voice_btn.click(
+        fn=assign_same_voice_to_all,
+        inputs=[quick_voice_select, batch_files],
+        outputs=file_voice_radios
+    )
+    
+    # Connect batch conversion functionality
+    def handle_batch_conversion_with_voices(files, speed, output_format, *voice_assignments):
+        summary, audio_files = batch_convert_text_files_with_voices(files, speed, output_format, *voice_assignments)
+        audio_updates = update_batch_audio_players(audio_files)
+        return [summary] + audio_updates
+    
+    batch_convert_btn.click(
+        fn=handle_batch_conversion_with_voices,
+        inputs=[batch_files, batch_speed, batch_output_format] + file_voice_radios,
+        outputs=[batch_results, batch_audio_files] + batch_audio_players
+    )
+    
     # Update the voice list when refreshing
     def update_voice_list():
         updated_choices = update_voice_choices()
         return gr.update(choices=list(updated_choices.keys()), value=list(updated_choices.keys())[0])
     
-    refresh_btn.click(fn=update_voice_list, inputs=[], outputs=[voice])
+    def update_all_voice_lists():
+        updated_choices = update_voice_choices()
+        voice_update = gr.update(choices=list(updated_choices.keys()), value=list(updated_choices.keys())[0])
+        
+        # Update all voice components
+        updates = [voice_update]  # Main voice radio
+        
+        # Update file voice radios
+        for _ in range(20):
+            updates.append(gr.update(choices=list(updated_choices.keys())))
+        
+        # Update quick voice select
+        updates.append(gr.update(choices=list(updated_choices.keys())[:5], value=list(updated_choices.keys())[0]))
+        
+        return updates
+    
+    refresh_btn.click(
+        fn=update_all_voice_lists, 
+        inputs=[], 
+        outputs=[voice] + file_voice_radios + [quick_voice_select]
+    )
     
     # Custom voice tab functionality
     upload_btn.click(
