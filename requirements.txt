@@ -16,3 +16,4 @@ pydub
 ffmpeg
 imageio-ffmpeg
 scipy
+hf_xet
