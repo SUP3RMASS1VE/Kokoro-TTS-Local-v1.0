@@ -2460,6 +2460,8 @@ with gr.Blocks(css="""
                             elem_id="text-input"
                         )
                         
+                        generate_btn = gr.Button('🔊 Generate Speech', variant='primary', elem_id="generate-btn")
+                        
                         with gr.Row():
                             with gr.Column(scale=3):
                                 voice = gr.Radio(
@@ -2493,8 +2495,6 @@ with gr.Blocks(css="""
                         
                         with gr.Row():
                             refresh_btn = gr.Button('🔄 Refresh Voices To Show Custom Voices', size='sm')
-                    
-                        generate_btn = gr.Button('🔊 Generate Speech', variant='primary', elem_id="generate-btn")
                     
                 with gr.Column(scale=2):
                     with gr.Column(elem_id="output-box", elem_classes=["card"]):
@@ -2850,7 +2850,7 @@ with gr.Blocks(css="""
                             )
                         
                         quick_voice_select = gr.Radio(
-                            choices=list(update_voice_choices().keys())[:10],  # Show top 5 voices for quick selection
+                            choices=list(update_voice_choices().keys())[:28],  # Show top 5 voices for quick selection
                             value=list(update_voice_choices().keys())[0],
                             label="Quick Voice Selection",
                             interactive=True
